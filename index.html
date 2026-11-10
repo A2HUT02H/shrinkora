@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shrinkora // Image & PDF Compressor</title>
+  <meta name="description" content="Free, private, local client-side image and PDF compressor. Compress files to your exact desired size directly in your browser.">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- PDF.js for rendering PDF pages in-browser -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- PDF-Lib for creating and saving compressed PDFs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <!-- JSZip for batch downloading all compressed files -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+  <canvas id="canvas" class="bg-canvas" aria-hidden="true"></canvas>
+  <div class="app-container">
+    <div id="runtimeNotice" class="runtime-notice hidden" role="status" aria-live="polite"></div>
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo">
+          <span class="logo-mark">✦</span>
+          <span class="logo-title">Shrinkora</span>
+          <span class="version-tag">v1.0</span>
+        </div>
+        <p class="subtitle">Local in-browser image &amp; PDF compressor to exact target size.</p>
+      </div>
+      <div class="header-right">
+      
+        <button id="themeToggleBtn" class="theme-toggle" aria-label="Toggle dark/light mode" title="Toggle theme">
+          <span class="theme-icon">◐</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Upload Drop Zone -->
+      <section id="dropzoneSection" class="dropzone-section">
+        <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload images or PDF files">
+          <input type="file" id="fileInput" multiple accept="image/*,application/pdf" class="file-input-hidden">
+          <div class="dropzone-content">
+            <div class="drop-icon">⤓</div>
+            <div class="drop-title">DROP IMAGES OR PDFS HERE</div>
+            <div class="drop-desc">or click anywhere to browse files from your computer</div>
+            <div class="supported-formats">
+              <span class="format-tag">JPG</span>
+              <span class="format-tag">PNG</span>
+              <span class="format-tag">WEBP</span>
+              <span class="format-tag">AVIF</span>
+              <span class="format-tag">GIF</span>
+              <span class="format-tag">PDF</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Action Toolbar (Batch) -->
+      <section id="batchToolbar" class="batch-toolbar hidden">
+        <div class="toolbar-left">
+          <button type="button" id="addMoreFilesBtn" class="btn btn-secondary btn-sm" title="Add more images or PDF files">
+            + ADD FILES
+          </button>
+          <span class="queue-divider">|</span>
+          <span class="queue-count mono-val"><span id="totalFilesCount">0</span> FILES LOADED</span>
+          <span class="queue-divider">|</span>
+          <span class="queue-size mono-val">TOTAL: <span id="totalOriginalSize">0 KB</span></span>
+          <span id="batchSavingsTag" class="savings-tag hidden"></span>
+        </div>
+        <div class="toolbar-right">
+          <button type="button" id="applySettingsToAllBtn" class="btn btn-secondary" title="Apply first file's target size to all queued files">
+            APPLY TO ALL
+          </button>
+          <button type="button" id="compressAllBtn" class="btn btn-primary">
+            ⚡ COMPRESS ALL
+          </button>
+          <button type="button" id="downloadAllBtn" class="btn btn-primary hidden">
+            📦 DOWNLOAD ALL (.ZIP)
+          </button>
+          <button type="button" id="clearAllBtn" class="btn btn-ghost" title="Clear all files">
+            CLEAR
+          </button>
+        </div>
+      </section>
+
+      <!-- File Queue & Results List -->
+      <section id="fileListSection" class="file-list-section hidden">
+        <div class="file-list-header">
+          <span>FILE / PREVIEW</span>
+          <span>ORIGINAL</span>
+          <span>DESIRED TARGET</span>
+          <span>COMPRESSED RESULT</span>
+          <span>ACTIONS</span>
+        </div>
+        <div id="fileCardsContainer" class="file-cards-container">
+          <!-- Dynamically populated file rows -->
+        </div>
+        <div class="file-list-footer">
+          <button type="button" id="addFilesBottomBtn" class="btn btn-ghost btn-sm" title="Add more images or PDF files">
+            + ADD MORE FILES
+          </button>
+          <span class="file-list-footer-hint">or drag &amp; drop files anywhere</span>
+        </div>
+      </section>
+    </main>
+
+    <!-- Comparison Modal -->
+    <div id="previewModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <h3 id="modalTitle" class="modal-title">BEFORE / AFTER INSPECTION</h3>
+            <span id="modalMeta" class="modal-meta mono-val"></span>
+          </div>
+          <div class="zoom-controls">
+            <button type="button" id="zoomOutBtn" class="zoom-btn" title="Zoom out">&#8722;</button>
+            <input type="range" id="zoomSlider" min="25" max="500" value="100" class="zoom-slider" title="Zoom level">
+            <span id="zoomValue" class="zoom-value mono-val">100%</span>
+            <button type="button" id="zoomInBtn" class="zoom-btn" title="Zoom in">&#43;</button>
+          </div>
+          <button type="button" id="closeModalBtn" class="modal-close-btn" aria-label="Close dialog">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="comparison-container">
+            <div class="comparison-pane">
+              <div class="pane-tag">ORIGINAL (<span id="modalOrigSize" class="mono-val"></span>)</div>
+              <div class="pane-media" id="modalOriginalMedia"></div>
+            </div>
+            <div class="comparison-divider"></div>
+            <div class="comparison-pane">
+              <div class="pane-tag">COMPRESSED (<span id="modalCompSize" class="mono-val"></span>)</div>
+              <div class="pane-media" id="modalCompressedMedia"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <div id="modalStats" class="mono-val"></div>
+          <button type="button" id="modalDownloadBtn" class="btn btn-primary">DOWNLOAD COMPRESSED</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-left">
+        <span>Shrinkora &bull; CLIENT-SIDE ONLY</span>
+      </div>
+      <div class="footer-center">
+        <span>NO COOKIES &bull; NO TRACKING &bull; NO CLOUD STORAGE</span>
+      </div>
+      <div class="footer-right">
+        <span>MINIMALIST B&amp;W EDITION</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
